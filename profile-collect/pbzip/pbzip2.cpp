@@ -9,7 +9,7 @@
  *           - uses libbzip2 by Julian Seward (http://sources.redhat.com/bzip2/)
  *           - Major contributions by Yavor Nikolov (http://javornikolov.wordpress.com)
  */
-
+#define PBZIP_DEBUG
 #include "pbzip2.h"
 #include "BZ2StreamScanner.h"
 #include "ErrorContext.h"
@@ -1717,7 +1717,7 @@ void *fileWriter(void *outname)
 			OutputBuffer[outBufferPos].buf, OutputBuffer[outBufferPos].bufSize, currBlock,
 			outBlock->sequenceNumber, (int)outBlock->isLastInSequence);
 		#endif
-
+		CAUSAL_PROGRESS;
 		// write data to the output file
 		ret = do_write(hOutfile, outBlock->buf, outBlock->bufSize);
 
@@ -1999,7 +1999,6 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, const char *OutFi
 
 		// compress the memory buffer (blocksize=9*100k, verbose=0, worklevel=30)
 		ret = BZ2_bzBuffToBuffCompress(CompressedData, &outSize, FileData, inSize, BWTblockSize, Verbosity, 30);
-		CAUSAL_PROGRESS;
 		if (ret != BZ_OK)
 		{
 			close(hInfile);
@@ -2018,7 +2017,7 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, const char *OutFi
 		//
 		// WRITE DATA
 		//
-
+		CAUSAL_PROGRESS;
 		// write data to the output file
 		ret = do_write(hOutfile, CompressedData, outSize);
 
@@ -2610,7 +2609,6 @@ void *consumer (void *q)
 		// compress the memory buffer (blocksize=9*100k, verbose=0, worklevel=30)
 		ret = BZ2_bzBuffToBuffCompress(CompressedData, &outSize,
 				fileData->buf, fileData->bufSize, BWTblockSize, Verbosity, 30);
-		CAUSAL_PROGRESS;
 		if (ret != BZ_OK)
 		{
 			handle_error(EF_EXIT, -1, "pbzip2: *ERROR during compression: %d!  Aborting...\n", ret);
