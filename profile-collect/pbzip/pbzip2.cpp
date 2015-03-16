@@ -1,19 +1,7 @@
-/*
- *  File  : pbzip2.cpp
- *
- *  Title : Parallel BZIP2 (pbzip2)
- *
- *  Author: Jeff Gilchrist (http://gilchrist.ca/jeff/)
- *           - Modified producer/consumer threading code from
- *             Andrae Muys <andrae@humbug.org.au.au>
- *           - uses libbzip2 by Julian Seward (http://sources.redhat.com/bzip2/)
- *           - Major contributions by Yavor Nikolov (http://javornikolov.wordpress.com)
- */
-#define PBZIP_DEBUG
 #include "pbzip2.h"
 #include "BZ2StreamScanner.h"
 #include "ErrorContext.h"
-#include "../../include/causal.h"
+
 #include <vector>
 #include <algorithm>
 #include <string>
@@ -33,6 +21,8 @@ extern "C"
 #include <bzlib.h>
 #include <limits.h>
 }
+
+#include "causal.h"
 
 
 //
@@ -281,6 +271,13 @@ int safe_cond_timed_wait(pthread_cond_t *cond, pthread_mutex_t *mutex, int secon
 	return 0;
 }
 
+int call_progress()
+{
+	CAUSAL_PROGRESS;
+	return 1;
+}
+
+
 /*
  * Delegate to write but keep writing until count bytes are written or
  * error is encountered (on success all count bytes would be written)
@@ -290,18 +287,16 @@ ssize_t do_write(int fd, const void *buf, size_t count)
 	ssize_t bytesRemaining = count;
 	ssize_t nbytes = 0;
 	const char *pbuf = (const char *)buf;
-	while ((bytesRemaining > 0) && ((nbytes = write(fd, pbuf, bytesRemaining)) > 0))
+	while ((bytesRemaining > 0) && ((nbytes = write(fd, pbuf, bytesRemaining)) > 0 ) && call_progress())
 	{
 		bytesRemaining -= nbytes;
 		pbuf += nbytes;
 	}
-
 	if (nbytes < 0)
 	{
 		ErrorContext::getInstance()->saveError();
 		return nbytes;
 	}
-
 	return (count - bytesRemaining);
 }
 
@@ -314,7 +309,7 @@ ssize_t do_read(int fd, void *buf, size_t count)
 	ssize_t bytesRemaining = count;
 	ssize_t nbytes = 0;
 	char *pbuf = (char *)buf;
-	while ((bytesRemaining > 0) && (nbytes = read(fd, pbuf, bytesRemaining)) > 0)
+	while ((bytesRemaining > 0) && (nbytes = read(fd, pbuf, bytesRemaining)) > 0 && call_progress() )
 	{
 		bytesRemaining -= nbytes;
 		pbuf += nbytes;
@@ -1717,14 +1712,12 @@ void *fileWriter(void *outname)
 			OutputBuffer[outBufferPos].buf, OutputBuffer[outBufferPos].bufSize, currBlock,
 			outBlock->sequenceNumber, (int)outBlock->isLastInSequence);
 		#endif
-		CAUSAL_PROGRESS;
 		// write data to the output file
 		ret = do_write(hOutfile, outBlock->buf, outBlock->bufSize);
 
 		#ifdef PBZIP_DEBUG
 		fprintf(stderr, "\n -> Total Bytes Written[%d:%d]: %d bytes...\n", currBlock, outBlock->sequenceNumber, ret);
 		#endif
-
 		if (ret < 0)
 		{
 			if (OutputStdOut == 0)
@@ -2017,7 +2010,6 @@ int directcompress(int hInfile, OFF_T fileSize, int blockSize, const char *OutFi
 		//
 		// WRITE DATA
 		//
-		CAUSAL_PROGRESS;
 		// write data to the output file
 		ret = do_write(hOutfile, CompressedData, outSize);
 
